@@ -132,25 +132,25 @@ def add_seam(im, seam_idx):
     return output
 
 def add_column(img,add_c):
+    img_original=img.copy()
     r,c,channels=img.shape
-    M, backtrack = minimumEnergySeam(img)
     seams_record = np.ones((add_c,r),dtype=np.int)
-    jmax=np.argmax(M[-1])
-    for i in range(add_c):
+    for i in trange(add_c):
+        M, backtrack = minimumEnergySeam(img)
         j = np.argmin(M[-1])
-        M[-1,j]=M[-1,jmax]
         seam=np.ones(r,dtype=np.int)
         for i2 in reversed(range(r)):
             seam[i2]=j
             j=backtrack[i2,j]
         seams_record[i]=seam
+        img=carve_column(img)
     for i in trange(add_c):
-        img=add_seam(img,seams_record[i])
+        visualize(img_original, seam, 0)
+        img_original=add_seam(img_original,seams_record[i])
         for i2 in range(i+1,add_c):
-            seams_record[i2][np.where(seams_record[i2]>=seams_record[i])]+=1
+            seams_record[i2][np.where(seams_record[i2]>=seams_record[i])]+=2
 
-    img = add_seam(img, seam)
-    return img
+    return img_original
 
 def minimumEnergySeam(img):
     #shape 能返回图片的宽高和通道数，
