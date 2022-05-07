@@ -169,7 +169,7 @@ def main():
     in_filename = sys.argv[3]
     out_filename = sys.argv[4]
 
-    img = imread(in_filename)
+    img = imread(in_filename).astype(np.uint8)
 
     if scale<1:
         if which_axis == 'r':
@@ -187,7 +187,7 @@ def main():
         else:
             print('usage: carver.py <r/c> <scale> <image_in> <image_out>', file=sys.stderr)
             sys.exit(1)
-    imwrite(out_filename, out)
+    imwrite(out_filename, out.astype(np.uint8))
 
 if __name__ == '__main__':
     main()
