@@ -12,9 +12,25 @@ import time
 import numpy as np
 from imageio import imread,imwrite
 from scipy.ndimage import convolve
+from matplotlib import pyplot as plt
 
 #这个库不是必须的，用来提供进度条
 from tqdm import trange
+import cv2
+
+SEAM_COLOR = np.array([255, 200, 200])
+def visualize(im, boolmask=None, rotate=False):
+    vis = im.astype(np.uint8)
+    r, c, _ = vis.shape
+    if boolmask is not None:
+        for i in range(r):
+            vis[i][boolmask[i]] = SEAM_COLOR
+    if rotate:
+        vis = np.rot90(vis, 3, (0, 1))
+    cv2.imshow("visualization", vis)
+    cv2.waitKey(30)
+    return vis
+
 
 #能量函数
 #使用了sobel算子，Google下sobel算子就知道大概过程了
@@ -84,16 +100,20 @@ def carve_column(img):
     # 后面会从值为False的图像中移除所有像素
     mask = np.ones((r, c), dtype=np.bool)
     j = np.argmin(M[-1])
+    seam=np.ones(r,dtype=np.int)
     for i in reversed(range(r)):
         # 标记出需要删除的像素
+        seam[i]=j
         mask[i, j] = False
-        j = backtrack[i, j]
+        j=backtrack[i, j]
+    visualize(img, seam, 0)
     mask = np.stack([mask] * 3, axis=2)
     img = img[mask].reshape((r, c - 1, 3))
     return img
 
 def add_seam(im, seam_idx):
     h, w = im.shape[:2]
+    visualize(im, seam_idx, 0)
     output = np.zeros((h, w + 1, 3))
     for row in range(h):
         col = seam_idx[row]
@@ -170,6 +190,7 @@ def main():
     out_filename = sys.argv[4]
 
     img = imread(in_filename).astype(np.uint8)
+    img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
 
     if scale<1:
         if which_axis == 'r':
@@ -187,6 +208,9 @@ def main():
         else:
             print('usage: carver.py <r/c> <scale> <image_in> <image_out>', file=sys.stderr)
             sys.exit(1)
+            
+    out = out.astype(np.uint8) 
+    out = cv2.cvtColor(out,cv2.COLOR_BGR2RGB)
     imwrite(out_filename, out.astype(np.uint8))
 
 if __name__ == '__main__':
