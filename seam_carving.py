@@ -1,10 +1,11 @@
 """
-Usage: python seam_carving.py <rs> <r/c> <scale> <image_in> <image_out> <energy_map_type>
+Usage: python seam_carving.py <rs> <r/c> <scale> <image_in> <image_out> <energy_map_type> <y/n>
 Or:python seam_carving.py <rm> <image_in> <image_out> <image_mask>
 <rm/rs> rm represents remove rs represents resize
 <r/c> 删除列还是删除行
 <scale> 缩小为原来的多少(0,1)之间的浮点数
 <energy_map_type> c:calc_energy b:backward_energy f:forward_energy
+<y/n> y:使用grabCut n:不使用grabCut
 """
 import sys
 from scipy.ndimage import convolve
@@ -364,7 +365,7 @@ def main():
                 out = crop_c(img, scale, energy_map_type, have_grabCut, False)
             else:
                 print(
-                    "Usage: python seam_carving.py <rm/rs> <r/c> <scale> <image_in> <image_out> <energy_map_type>",
+                    "Usage: python seam_carving.py <rm/rs> <r/c> <scale> <image_in> <image_out> <energy_map_type> <y/n>",
                     file=sys.stderr,
                 )
                 sys.exit(1)
@@ -376,7 +377,7 @@ def main():
                 out = add_c(img, scale, energy_map_type, have_grabCut, False)
             else:
                 print(
-                    "Usage: python seam_carving.py <rm/rs> <r/c> <scale> <image_in> <image_out> <energy_map_type>",
+                    "Usage: python seam_carving.py <rm/rs> <r/c> <scale> <image_in> <image_out> <energy_map_type> <y/n>",
                     file=sys.stderr,
                 )
                 sys.exit(1)
@@ -385,7 +386,7 @@ def main():
         cv2.imwrite(out_filename, out.astype(np.float64))
     else:
         print(
-            "Usage: python seam_carving.py <rm/rs> <r/c> <scale> <image_in> <image_out> <energy_map_type>",
+            "Usage: python seam_carving.py <rm/rs> <r/c> <scale> <image_in> <image_out> <energy_map_type> <y/n>",
             file=sys.stderr,
         )
         sys.exit(1)
