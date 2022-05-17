@@ -293,11 +293,8 @@ def improve_seam(im_rgb, rotated):
     else:
         im_cut_rot = im_cut.copy()
     r0, c0 = im_cut.shape[:2]
-    print(r0,c0)
     r = cv2.selectROI('input', im_cut_rot, False) 
     rect = (int(r[1]), int(r0-r[0]-r[2]), int(r[3]), int(r[2]))
-    print(r[0],r[1],r[2],r[3])
-    print(r[1],r0-r[0]-r[2])
     rows, cols = im_cut.shape[0], im_cut.shape[1]
     mask = np.zeros(im_cut.shape[:2],np.uint8)
     bgdModel = np.zeros((1,65),np.float64)
