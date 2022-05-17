@@ -27,6 +27,8 @@ def visualize(im, seams, rotate=False):
             vis[i][seams[i]] = SEAM_COLOR
     if rotate:
         vis = np.rot90(vis, 3, (0, 1))
+    #cv2.namedWindow('visualization', cv2.WINDOW_NORMAL)
+    #cv2.resizeWindow("visualization", 500, 500)
     cv2.imshow("visualization", vis)
     cv2.waitKey(30)
     return vis
@@ -137,30 +139,30 @@ def forward_energy(im):
     return energy
 
 
-def crop_c(img, scale_c, energy_map_type, rotated):
+def crop_c(img, scale_c, energy_map_type, if_grabCut, rotated):
     r, c, _ = img.shape
     new_c = int((1 - scale_c) * c)
-    img = resize_image(img, new_c, energy_map_type, rotated)
+    img = resize_image(img, new_c, energy_map_type, if_grabCut, rotated)
     return img
 
 
-def crop_r(img, scale_r, energy_map_type):
+def crop_r(img, scale_r, energy_map_type, if_grabCut):
     img = np.rot90(img, 1, (0, 1))
-    img = crop_c(img, scale_r, energy_map_type, True)
+    img = crop_c(img, scale_r, energy_map_type, if_grabCut, True)
     img = np.rot90(img, 3, (0, 1))
     return img
 
 
-def add_c(img, scale_c, energy_map_type, rotated):
+def add_c(img, scale_c, energy_map_type, if_grabCut, rotated):
     r, c, _ = img.shape
     new_c = int(scale_c * c)
-    img = add_column(img, new_c - c, energy_map_type, rotated)
+    img = add_column(img, new_c - c, energy_map_type, if_grabCut, rotated)
     return img
 
 
-def add_r(img, scale_r, energy_map_type):
+def add_r(img, scale_r, energy_map_type, if_grabCut):
     img = np.rot90(img, 1, (0, 1))
-    img = add_c(img, scale_r, energy_map_type, True)
+    img = add_c(img, scale_r, energy_map_type, if_grabCut, True)
     img = np.rot90(img, 3, (0, 1))
     return img
 
@@ -211,10 +213,14 @@ def add_seam(im, seam_idx, rotated=False):
 
     return output
 
-def add_column(img, add_c, energy_map_type, rotated=False):
+def add_column(img, add_c, energy_map_type, if_grabCut, rotated=False):
     img_original = img.copy()
     r, c, channels = img.shape
     seams_record = np.ones((add_c, r), dtype=int)
+
+    if(if_grabCut):
+        energy_grabCut=improve_seam(img,rotated)
+
     for i in trange(add_c, desc="cropping image by {0} pixels".format(add_c)):
         if energy_map_type == "c":
             energy_map = calc_energy(img)
@@ -223,12 +229,20 @@ def add_column(img, add_c, energy_map_type, rotated=False):
         else:
             energy_map = forward_energy(img)
 
+        if(if_grabCut):
+            r,c=energy_grabCut.shape[:2]
+            for i in range(r):
+                for j in range(c):
+                    energy_map[i][j] = energy_grabCut[i][j]+energy_map[i][j]
+
         backtrack, energy_totals = cumulative_energy(energy_map)
         energy_minc = list(energy_totals[-1]).index(min(energy_totals[-1]))
         seam = find_seam(backtrack, energy_minc)
         visualize(img, seam, rotated)
         seams_record[i] = seam
         img = remove_seam(img, seam)
+        if(if_grabCut):
+            energy_grabCut=remove_seam_grayscale(energy_grabCut,seam)
 
     for i in trange(add_c, desc="expanding image by {0} pixels".format(add_c)):
         img_original = add_seam(img_original, seams_record[i], rotated)
@@ -241,9 +255,12 @@ def resize_image(
     full_img,
     cropped_c,
     energy_map_type,
+    if_grabCut,
     rotated=False,
 ):
     img = full_img.copy()
+    if(if_grabCut):
+        energy_grabCut=improve_seam(img,rotated)
 
     for _ in trange(cropped_c, desc="cropping image by {0} pixels".format(cropped_c)):
 
@@ -254,13 +271,48 @@ def resize_image(
         else:
             energy_map = forward_energy(img)
 
+        if(if_grabCut):
+            energy_map+=energy_grabCut
+
         backtrack, energy_totals = cumulative_energy(energy_map)
         energy_minc = list(energy_totals[-1]).index(min(energy_totals[-1]))
         seam = find_seam(backtrack, energy_minc)
         visualize(img, seam, rotated)
         img = remove_seam(img, seam)
+        if(if_grabCut):
+            energy_grabCut=remove_seam_grayscale(energy_grabCut,seam)
 
     return img
+
+
+def improve_seam(im_rgb, rotated):
+    im_cut = im_rgb.copy().astype('uint8')
+    if rotated:
+        im_cut_rot = np.rot90(im_cut, 3, (0, 1))
+    else:
+        im_cut_rot = im_cut.copy()
+    r0, c0 = im_cut.shape[:2]
+    print(r0,c0)
+    r = cv2.selectROI('input', im_cut_rot, False) 
+    rect = (int(r[1]), int(r0-r[0]-r[2]), int(r[3]), int(r[2]))
+    print(r[0],r[1],r[2],r[3])
+    print(r[1],r0-r[0]-r[2])
+    rows, cols = im_cut.shape[0], im_cut.shape[1]
+    mask = np.zeros(im_cut.shape[:2],np.uint8)
+    bgdModel = np.zeros((1,65),np.float64)
+    fgdModel = np.zeros((1,65),np.float64)
+    cv2.grabCut(im_cut,mask,rect,bgdModel,fgdModel,10,cv2.GC_INIT_WITH_RECT)
+    mask2 = np.where((mask==2)|(mask==0),0,1).astype('uint8')#0和2做背景
+    energy_map =calc_energy(im_rgb)
+    for i in range(rows):
+            for j in range(cols):
+                if (mask2[i][j] == 1):
+                    energy_map[i][j] = 10000
+                elif ( mask2[i][j]==3):
+                    energy_map[i][j] = 10000
+                else:
+                    energy_map[i][j] = 0
+    return energy_map
 
 def object_removal(img,mask):
     h, w = img.shape[:2]
@@ -290,21 +342,26 @@ def main():
         img_mask = cv2.imread(mask_filename,0).astype(np.float64)
         img_out=object_removal(img_in,img_mask)
         cv2.imwrite(out_filename, img_out.astype(np.float64))
-    elif len(sys.argv) == 7:
+    elif len(sys.argv) == 8:
 
         which_axis = sys.argv[2]
         scale = float(sys.argv[3])
         in_filename = sys.argv[4]
         out_filename = sys.argv[5]
         energy_map_type = sys.argv[6]
+        if_grabCut =sys.argv[7]
 
         img = cv2.imread(in_filename).astype(np.float64)
+        if(if_grabCut)=='y':
+            have_grabCut=True
+        else:
+            have_grabCut=False
 
         if scale < 1:
             if which_axis == "r":
-                out = crop_r(img, scale, energy_map_type)
+                out = crop_r(img, scale, energy_map_type, have_grabCut)
             elif which_axis == "c":
-                out = crop_c(img, scale, energy_map_type, False)
+                out = crop_c(img, scale, energy_map_type, have_grabCut, False)
             else:
                 print(
                     "Usage: python seam_carving.py <rm/rs> <r/c> <scale> <image_in> <image_out> <energy_map_type>",
@@ -314,9 +371,9 @@ def main():
 
         elif scale > 1:
             if which_axis == "r":
-                out = add_r(img, scale, energy_map_type)
+                out = add_r(img, scale, energy_map_type, have_grabCut)
             elif which_axis == "c":
-                out = add_c(img, scale, energy_map_type, False)
+                out = add_c(img, scale, energy_map_type, have_grabCut, False)
             else:
                 print(
                     "Usage: python seam_carving.py <rm/rs> <r/c> <scale> <image_in> <image_out> <energy_map_type>",
