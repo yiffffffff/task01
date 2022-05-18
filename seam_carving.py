@@ -231,10 +231,7 @@ def add_column(img, add_c, energy_map_type, if_grabCut, rotated=False):
             energy_map = forward_energy(img)
 
         if(if_grabCut):
-            r,c=energy_grabCut.shape[:2]
-            for i in range(r):
-                for j in range(c):
-                    energy_map[i][j] = energy_grabCut[i][j]+energy_map[i][j]
+            energy_map+=energy_grabCut
 
         backtrack, energy_totals = cumulative_energy(energy_map)
         energy_minc = list(energy_totals[-1]).index(min(energy_totals[-1]))
